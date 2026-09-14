@@ -1,6 +1,7 @@
 {
   "Language": "js",
   "Plugins": [
+    "screenshot",
     "allure-report"
   ]
 }

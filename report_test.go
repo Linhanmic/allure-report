@@ -35,7 +35,11 @@ func TestCreateReportWritesResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
-		t.Fatal("expected stale result to be removed when overwrite_reports=true")
+		t.Fatal("expected stale result to be archived when overwrite_reports=true")
+	}
+	archiveRoot := filepath.Join(root, "reports", "archive")
+	if _, err := os.Stat(archiveRoot); err != nil {
+		t.Fatalf("expected archive dir: %v", err)
 	}
 	found := false
 	for _, e := range entries {

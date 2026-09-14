@@ -18,7 +18,7 @@
 # 在仓库根目录
 go run build/make.go --install
 # 或
-gauge install allure-report --file deploy/allure-report-0.1.0-linux.x86_64.zip
+gauge install allure-report --file deploy/allure-report-0.2.0-linux.x86_64.zip
 ```
 
 再执行规格：

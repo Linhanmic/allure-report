@@ -23,15 +23,16 @@ const (
 
 // Options control how Gauge results are mapped to Allure results.
 type Options struct {
-	ProjectRoot  string
-	IssuePattern string
-	TMSPattern   string
-	Host         string
-	ReportName   string
-	Now          func() time.Time
-	ReadFile     func(path string) ([]byte, error)
-	FileExists   func(path string) bool
-	LookupEnv    func(key string) string
+	ProjectRoot    string
+	ScreenshotsDir string
+	IssuePattern   string
+	TMSPattern     string
+	Host           string
+	ReportName     string
+	Now            func() time.Time
+	ReadFile       func(path string) ([]byte, error)
+	FileExists     func(path string) bool
+	LookupEnv      func(key string) string
 }
 
 func (o *Options) withDefaults() {
@@ -600,10 +601,14 @@ func (m *Model) addScreenshot(name, path string, opts Options) Attachment {
 		return Attachment{}
 	}
 	resolved := resolveFile(path, opts)
+	if resolved == "" {
+		return Attachment{}
+	}
 	ext := filepath.Ext(resolved)
 	if ext == "" {
 		ext = ".png"
 	}
+	displayName := screenshotDisplayName(name, resolved)
 	file := File{
 		Name:        newUUID() + "-attachment" + ext,
 		ContentType: mimeFromExt(ext),
@@ -614,7 +619,15 @@ func (m *Model) addScreenshot(name, path string, opts Options) Attachment {
 		file.SourcePath = ""
 	}
 	m.Files = append(m.Files, file)
-	return Attachment{Name: name, Type: file.ContentType, Source: file.Name}
+	return Attachment{Name: displayName, Type: file.ContentType, Source: file.Name}
+}
+
+func screenshotDisplayName(name, resolved string) string {
+	base := filepath.Base(resolved)
+	if base != "" && base != "." {
+		return base
+	}
+	return name
 }
 
 func (m *Model) addBytes(name, contentType, ext string, data []byte) Attachment {
@@ -628,11 +641,19 @@ func (m *Model) addBytes(name, contentType, ext string, data []byte) Attachment 
 }
 
 func resolveFile(path string, opts Options) string {
-	candidates := []string{path}
+	if path == "" {
+		return ""
+	}
+	base := filepath.Base(path)
+	candidates := make([]string, 0, 6)
+	if opts.ScreenshotsDir != "" {
+		candidates = append(candidates, filepath.Join(opts.ScreenshotsDir, base))
+	}
+	candidates = append(candidates, path)
 	if !filepath.IsAbs(path) && opts.ProjectRoot != "" {
 		candidates = append(candidates,
 			filepath.Join(opts.ProjectRoot, path),
-			filepath.Join(opts.ProjectRoot, ".gauge", "screenshots", filepath.Base(path)),
+			filepath.Join(opts.ProjectRoot, ".gauge", "screenshots", base),
 		)
 	}
 	for _, candidate := range candidates {
@@ -640,7 +661,7 @@ func resolveFile(path string, opts Options) string {
 			return candidate
 		}
 	}
-	return path
+	return ""
 }
 
 func mimeFromExt(ext string) string {

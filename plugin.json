@@ -1,6 +1,6 @@
 {
   "id": "allure-report",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "name": "Allure Report",
   "description": "Allure 3 reporting plugin for Gauge",
   "install": {

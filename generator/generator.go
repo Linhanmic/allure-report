@@ -21,7 +21,6 @@ type Options struct {
 	Language   string
 	Theme      string
 	SingleFile bool
-	BundledDir string
 	LookPath   func(file string) (string, error)
 	Command    func(name string, args ...string) *exec.Cmd
 }
@@ -70,7 +69,7 @@ func Generate(opts Options) (*Result, error) {
 
 	attempts := commands(opts, configPath)
 	if len(attempts) == 0 {
-		return &Result{Generated: false}, fmt.Errorf("no report generator available: install Node.js for bundled Allure, or add allure/npx to PATH")
+		return &Result{Generated: false}, fmt.Errorf("no report generator available: install Allure 3 CLI (allure) or Node.js (npx allure@3)")
 	}
 
 	var lastErr error
@@ -99,14 +98,6 @@ func commands(opts Options, configPath string) [][]string {
 	}
 
 	var out [][]string
-	bundledDir := resolveBundledDir(opts)
-	if bundledAvailable(bundledDir) {
-		if node, err := opts.LookPath("node"); err == nil {
-			script := filepath.Join(bundledDir, "generate.mjs")
-			out = append(out, append([]string{node, script}, awesomeArgs...))
-			out = append(out, append([]string{node, script}, generateArgs...))
-		}
-	}
 	if path, err := opts.LookPath("allure"); err == nil {
 		out = append(out, append([]string{path}, awesomeArgs...))
 		out = append(out, append([]string{path}, generateArgs...))

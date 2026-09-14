@@ -40,6 +40,38 @@ func TestConvertPassedScenarioWithSteps(t *testing.T) {
 	}
 }
 
+func TestConvertScreenshotFromGaugeScreenshotsDir(t *testing.T) {
+	screenshotsDir := t.TempDir()
+	shotName := "screenshot-123.png"
+	if err := os.WriteFile(filepath.Join(screenshotsDir, shotName), []byte("png"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	step := &gauge_messages.ProtoItem{
+		ItemType: gauge_messages.ProtoItem_Step,
+		Step: &gauge_messages.ProtoStep{
+			ActualText: "失败步骤",
+			StepExecutionResult: &gauge_messages.ProtoStepExecutionResult{
+				ExecutionResult: &gauge_messages.ProtoExecutionResult{
+					Failed:                true,
+					ErrorMessage:          "boom",
+					FailureScreenshotFile: shotName,
+				},
+			},
+		},
+	}
+	suite := sampleSuite(scenarioWith("截图场景", gauge_messages.ExecutionStatus_FAILED, step))
+	model := Convert(suite, Options{ScreenshotsDir: screenshotsDir, FileExists: func(p string) bool {
+		_, err := os.Stat(p)
+		return err == nil
+	}})
+	if len(model.Files) == 0 {
+		t.Fatal("expected screenshot bytes from gauge_screenshots_dir")
+	}
+	if model.Results[0].Steps[0].Attachments[0].Name != shotName {
+		t.Fatalf("attachment name: %s", model.Results[0].Steps[0].Attachments[0].Name)
+	}
+}
+
 func TestConvertFailedAssertionAndScreenshot(t *testing.T) {
 	shot := filepath.Join(t.TempDir(), "fail.png")
 	if err := os.WriteFile(shot, []byte("png"), 0o644); err != nil {

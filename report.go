@@ -16,7 +16,10 @@ import (
 const (
 	pluginID                    = "allure-report"
 	defaultReportsDir           = "reports"
+	allureResultsDirName        = "allure-results"
+	allureReportDirName         = "allure-report"
 	gaugeReportsDirEnvName      = "gauge_reports_dir"
+	gaugeScreenshotsDirEnvName  = "gauge_screenshots_dir"
 	overwriteReportsEnvProperty = "overwrite_reports"
 	pluginActionEnv             = pluginID + "_action"
 	executionAction             = "execution"
@@ -29,22 +32,21 @@ var projectRoot string
 
 func createReport(suiteResult *gauge_messages.SuiteExecutionResult) {
 	cfg := loadConfig()
-	if shouldOverwriteReports() {
-		_ = os.RemoveAll(cfg.ResultsDir)
-		_ = os.RemoveAll(cfg.ReportDir)
+	if err := prepareReportDirs(cfg, cfg.ReportsRoot); err != nil {
+		logger.Fatal("Failed to prepare report directories: %s", err)
 	}
-	if err := os.MkdirAll(cfg.ResultsDir, dirPermissions); err != nil {
-		logger.Fatal("Failed to create results directory %s: %s", cfg.ResultsDir, err)
-	}
-	if err := os.MkdirAll(cfg.ReportDir, dirPermissions); err != nil {
-		logger.Fatal("Failed to create report directory %s: %s", cfg.ReportDir, err)
+
+	screenshotsDir := os.Getenv(gaugeScreenshotsDirEnvName)
+	if screenshotsDir != "" && !filepath.IsAbs(screenshotsDir) && projectRoot != "" {
+		screenshotsDir = filepath.Join(projectRoot, screenshotsDir)
 	}
 
 	model := converter.Convert(suiteResult.GetSuiteResult(), converter.Options{
-		ProjectRoot:  projectRoot,
-		IssuePattern: cfg.IssuePattern,
-		TMSPattern:   cfg.TMSPattern,
-		ReportName:   cfg.ReportName,
+		ProjectRoot:    projectRoot,
+		ScreenshotsDir: screenshotsDir,
+		IssuePattern:   cfg.IssuePattern,
+		TMSPattern:     cfg.TMSPattern,
+		ReportName:     cfg.ReportName,
 	})
 	if err := writer.Write(model, cfg.ResultsDir); err != nil {
 		logger.Fatal("Failed to write Allure results: %s", err)
@@ -64,7 +66,7 @@ func createReport(suiteResult *gauge_messages.SuiteExecutionResult) {
 	})
 	if err != nil {
 		logger.Error("Allure 3 HTML report was not generated: %s", err)
-		logger.Info("Raw Allure results are available at %s. Offline: ensure Node.js is installed and the plugin bundle contains bundled/node_modules. Online fallback: allure awesome %s --output %s", cfg.ResultsDir, cfg.ResultsDir, cfg.ReportDir)
+		logger.Info("Raw Allure results are available at %s. Install Allure 3 CLI or Node.js (npx allure@3) and run: allure awesome %s --output %s --single-file", cfg.ResultsDir, cfg.ResultsDir, cfg.ReportDir)
 		return
 	}
 	if result != nil && result.Generated {
@@ -73,15 +75,17 @@ func createReport(suiteResult *gauge_messages.SuiteExecutionResult) {
 }
 
 type pluginConfig struct {
-	ResultsDir   string
-	ReportDir    string
-	ReportName   string
-	Language     string
-	Theme        string
-	IssuePattern string
-	TMSPattern   string
-	SingleFile   bool
-	GenerateHTML bool
+	ReportsRoot    string
+	ResultsDir     string
+	ReportDir      string
+	ReportName     string
+	Language       string
+	Theme          string
+	IssuePattern   string
+	TMSPattern     string
+	SingleFile     bool
+	GenerateHTML   bool
+	UseCustomDirs  bool
 }
 
 func loadConfig() pluginConfig {
@@ -92,17 +96,26 @@ func loadConfig() pluginConfig {
 	if !filepath.IsAbs(reportsDir) && projectRoot != "" {
 		reportsDir = filepath.Join(projectRoot, reportsDir)
 	}
-	stamp := ""
-	if !shouldOverwriteReports() {
-		stamp = time.Now().Format(timeFormat)
-	}
-	base := reportsDir
-	if stamp != "" {
-		base = filepath.Join(reportsDir, stamp)
+
+	customResults := strings.TrimSpace(os.Getenv("allure_results_dir"))
+	customReport := strings.TrimSpace(os.Getenv("allure_report_dir"))
+	useCustom := customResults != "" || customReport != ""
+
+	var resultsDir, reportDir string
+	if useCustom {
+		base := reportsDir
+		resultsDir = envOr("allure_results_dir", filepath.Join(base, allureResultsDirName))
+		reportDir = envOr("allure_report_dir", filepath.Join(base, allureReportDirName))
+	} else if shouldOverwriteReports() {
+		resultsDir = filepath.Join(reportsDir, allureResultsDirName)
+		reportDir = filepath.Join(reportsDir, allureReportDirName)
+	} else {
+		stamp := time.Now().Format(timeFormat)
+		runDir := filepath.Join(reportsDir, allureReportDirName, stamp)
+		resultsDir = filepath.Join(runDir, allureResultsDirName)
+		reportDir = filepath.Join(runDir, allureReportDirName)
 	}
 
-	resultsDir := envOr("allure_results_dir", filepath.Join(base, "allure-results"))
-	reportDir := envOr("allure_report_dir", filepath.Join(base, "allure-report"))
 	if !filepath.IsAbs(resultsDir) && projectRoot != "" {
 		resultsDir = filepath.Join(projectRoot, resultsDir)
 	}
@@ -111,15 +124,17 @@ func loadConfig() pluginConfig {
 	}
 
 	return pluginConfig{
-		ResultsDir:   resultsDir,
-		ReportDir:    reportDir,
-		ReportName:   envOr("allure_report_name", "Gauge Allure Report"),
-		Language:     envOr("allure_report_language", "zh"),
-		Theme:        envOr("allure_report_theme", "auto"),
-		IssuePattern: os.Getenv("allure_issue_pattern"),
-		TMSPattern:   os.Getenv("allure_tms_pattern"),
-		SingleFile:   envBool("allure_report_single_file", true),
-		GenerateHTML: envBool("allure_report_generate", true),
+		ReportsRoot:   reportsDir,
+		ResultsDir:    resultsDir,
+		ReportDir:     reportDir,
+		ReportName:    envOr("allure_report_name", "Gauge Allure Report"),
+		Language:      envOr("allure_report_language", "zh"),
+		Theme:         envOr("allure_report_theme", "auto"),
+		IssuePattern:  os.Getenv("allure_issue_pattern"),
+		TMSPattern:    os.Getenv("allure_tms_pattern"),
+		SingleFile:    envBool("allure_report_single_file", true),
+		GenerateHTML:  envBool("allure_report_generate", true),
+		UseCustomDirs: useCustom,
 	}
 }
 

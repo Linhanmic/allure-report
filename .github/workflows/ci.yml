@@ -59,7 +59,7 @@ jobs:
       - name: Run example project
         working-directory: examples/gauge-js
         run: |
-          gauge run specs
+          gauge run specs || true
           test -f reports/allure-results/environment.properties
           test -f reports/allure-report/index.html
           grep -q '"failed":1' reports/allure-report/summary.json

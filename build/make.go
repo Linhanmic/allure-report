@@ -27,6 +27,7 @@ const (
 	linux             = "linux"
 	windows           = "windows"
 	bin               = "bin"
+	bundled           = "bundled"
 	deploy            = "deploy"
 	pluginJSONFile    = "plugin.json"
 	pluginID          = "allure-report"
@@ -77,6 +78,7 @@ func createPluginDistro(forAllPlatforms bool) {
 }
 
 func createDistro() {
+	installBundledDeps()
 	packageName := fmt.Sprintf("%s-%s-%s.%s", pluginID, getPluginVersion(), getGOOS(), getArch())
 	distroDir := filepath.Join(deploy, packageName)
 	copyPluginFiles(distroDir)
@@ -111,6 +113,7 @@ func compileAcrossPlatforms() {
 }
 
 func installPlugin(installPrefix string) {
+	installBundledDeps()
 	copyPluginFiles(deployDir)
 	pluginInstallPath := filepath.Join(installPrefix, pluginID, getPluginVersion())
 	if err := mirrorDir(deployDir, pluginInstallPath); err != nil {
@@ -127,7 +130,18 @@ func copyPluginFiles(destDir string) {
 		files[filepath.Join(getBinDir(), pluginID)] = bin
 	}
 	files[pluginJSONFile] = ""
+	files[bundled] = bundled
 	copyFiles(files, destDir)
+}
+
+func installBundledDeps() {
+	bundledDir := bundled
+	lockFile := filepath.Join(bundledDir, "package-lock.json")
+	if _, err := os.Stat(lockFile); err == nil {
+		runProcess("npm", "ci", "--prefix", bundledDir)
+		return
+	}
+	runProcess("npm", "install", "--prefix", bundledDir)
 }
 
 func copyFiles(files map[string]string, installDir string) {

@@ -1,0 +1,9 @@
+{
+  "name": "allure-report-bundled",
+  "private": true,
+  "type": "module",
+  "description": "Bundled Allure 3 CLI for offline HTML report generation",
+  "dependencies": {
+    "allure": "3.16.1"
+  }
+}

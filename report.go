@@ -64,7 +64,7 @@ func createReport(suiteResult *gauge_messages.SuiteExecutionResult) {
 	})
 	if err != nil {
 		logger.Error("Allure 3 HTML report was not generated: %s", err)
-		logger.Info("Raw Allure results are available at %s. Install Allure 3 (`npm i -g allure`) or Node.js (`npx allure`) and re-run, or execute: allure awesome %s --output %s", cfg.ResultsDir, cfg.ResultsDir, cfg.ReportDir)
+		logger.Info("Raw Allure results are available at %s. Offline: ensure Node.js is installed and the plugin bundle contains bundled/node_modules. Online fallback: allure awesome %s --output %s", cfg.ResultsDir, cfg.ResultsDir, cfg.ReportDir)
 		return
 	}
 	if result != nil && result.Generated {

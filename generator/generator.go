@@ -21,6 +21,7 @@ type Options struct {
 	Language   string
 	Theme      string
 	SingleFile bool
+	BundledDir string
 	LookPath   func(file string) (string, error)
 	Command    func(name string, args ...string) *exec.Cmd
 }
@@ -69,7 +70,7 @@ func Generate(opts Options) (*Result, error) {
 
 	attempts := commands(opts, configPath)
 	if len(attempts) == 0 {
-		return &Result{Generated: false}, fmt.Errorf("neither allure nor npx is available on PATH")
+		return &Result{Generated: false}, fmt.Errorf("no report generator available: install Node.js for bundled Allure, or add allure/npx to PATH")
 	}
 
 	var lastErr error
@@ -89,16 +90,7 @@ func Generate(opts Options) (*Result, error) {
 }
 
 func commands(opts Options, configPath string) [][]string {
-	awesomeArgs := []string{
-		"awesome", opts.ResultsDir,
-		"--output", opts.ReportDir,
-		"--config", configPath,
-		"--name", opts.ReportName,
-		"--report-language", opts.Language,
-	}
-	if opts.SingleFile {
-		awesomeArgs = append(awesomeArgs, "--single-file")
-	}
+	awesomeArgs := awesomeCLIArgs(opts, configPath)
 	generateArgs := []string{
 		"generate", opts.ResultsDir,
 		"--output", opts.ReportDir,
@@ -107,6 +99,14 @@ func commands(opts Options, configPath string) [][]string {
 	}
 
 	var out [][]string
+	bundledDir := resolveBundledDir(opts)
+	if bundledAvailable(bundledDir) {
+		if node, err := opts.LookPath("node"); err == nil {
+			script := filepath.Join(bundledDir, "generate.mjs")
+			out = append(out, append([]string{node, script}, awesomeArgs...))
+			out = append(out, append([]string{node, script}, generateArgs...))
+		}
+	}
 	if path, err := opts.LookPath("allure"); err == nil {
 		out = append(out, append([]string{path}, awesomeArgs...))
 		out = append(out, append([]string{path}, generateArgs...))
@@ -116,6 +116,20 @@ func commands(opts Options, configPath string) [][]string {
 		out = append(out, append([]string{path, "--yes", "allure@3"}, generateArgs...))
 	}
 	return out
+}
+
+func awesomeCLIArgs(opts Options, configPath string) []string {
+	args := []string{
+		"awesome", opts.ResultsDir,
+		"--output", opts.ReportDir,
+		"--config", configPath,
+		"--name", opts.ReportName,
+		"--report-language", opts.Language,
+	}
+	if opts.SingleFile {
+		args = append(args, "--single-file")
+	}
+	return args
 }
 
 func writeConfig(opts Options) (string, error) {

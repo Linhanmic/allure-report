@@ -1,0 +1,10 @@
+tmp
+deploy
+.idea
+bin
+*.iml
+.DS_Store
+allure-results
+allure-report
+reports
+coverage.out

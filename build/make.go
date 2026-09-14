@@ -79,6 +79,7 @@ func createPluginDistro(forAllPlatforms bool) {
 
 func createDistro() {
 	installBundledDeps()
+	compileGoPackage()
 	packageName := fmt.Sprintf("%s-%s-%s.%s", pluginID, getPluginVersion(), getGOOS(), getArch())
 	distroDir := filepath.Join(deploy, packageName)
 	copyPluginFiles(distroDir)
@@ -114,6 +115,7 @@ func compileAcrossPlatforms() {
 
 func installPlugin(installPrefix string) {
 	installBundledDeps()
+	compileGoPackage()
 	copyPluginFiles(deployDir)
 	pluginInstallPath := filepath.Join(installPrefix, pluginID, getPluginVersion())
 	if err := mirrorDir(deployDir, pluginInstallPath); err != nil {

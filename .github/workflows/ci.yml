@@ -44,6 +44,7 @@ jobs:
 
       - name: Install Gauge
         run: |
+          mkdir -p "$HOME/.local/bin"
           curl -SsL https://downloads.gauge.org/stable | sh -s -- --location="$HOME/.local/bin"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           gauge telemetry off || true

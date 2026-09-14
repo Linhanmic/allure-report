@@ -165,7 +165,7 @@ func convertScenario(scenario *gauge_messages.ProtoScenario, tableDriven *gauge_
 	status, details := scenarioStatus(scenario)
 	test.Status = status
 	test.StatusDetails = details
-	if scenario != nil && scenario.GetRetriesCount() > 0 {
+	if scenario != nil && scenario.GetRetriesCount() > 1 {
 		if test.StatusDetails == nil {
 			test.StatusDetails = &StatusDetails{}
 		}
@@ -267,7 +267,7 @@ func scenarioLabels(spec *gauge_messages.ProtoSpec, scenario *gauge_messages.Pro
 	}
 	if scenario != nil {
 		labels = append(labels, Label{Name: "testMethod", Value: scenario.GetScenarioHeading()})
-		if scenario.GetRetriesCount() > 0 {
+		if scenario.GetRetriesCount() > 1 {
 			labels = append(labels, Label{Name: "tag", Value: fmt.Sprintf("retries:%d", scenario.GetRetriesCount())})
 		}
 	}

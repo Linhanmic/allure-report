@@ -21,8 +21,21 @@ go run build/make.go --install
 或先打包 zip，再离线安装：
 
 ```bash
-go run build/make.go --distro
+make distro
 gauge install allure-report --file deploy/allure-report-0.1.0-<os>.<arch>.zip
+```
+
+跨平台打包：
+
+```bash
+make distro-all
+```
+
+发布到 GitHub Release（推送 `v*` 标签后自动上传 `deploy/*.zip`）：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 在 Gauge 项目的 `manifest.json` 中加入插件：
@@ -129,11 +142,24 @@ tags: severity:critical, owner:qa, issue:BUG-12
 - 断言失败 → `failed`；验证/Hook 异常 → `broken`；跳过 → `skipped`
 - Gauge 截图文件与自定义消息 → attachments / log steps
 
+## 示例项目
+
+仓库内提供了不依赖浏览器的 Gauge JS 示例：
+
+```bash
+make install
+cd examples/gauge-js
+gauge run specs
+```
+
+示例会生成包含通过、失败、跳过、Concept、数据表、标签与截图附件的 Allure 报告。
+
 ## 开发
 
 ```bash
 go test ./...
-go run build/make.go
+make build
+make example
 ```
 
 要求 Go 1.22+。生成 HTML 报告需要 Allure 3 或 Node.js。

@@ -10,10 +10,51 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
+
       - name: Test
         run: go test ./...
+
       - name: Build
-        run: go run build/make.go
+        run: CGO_ENABLED=0 go run build/make.go
+
+      - name: Package
+        run: CGO_ENABLED=0 go run build/make.go --distro
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Gauge
+        run: |
+          curl -SsL https://downloads.gauge.org/stable | sh -s -- --location="$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          gauge telemetry off || true
+          gauge install js
+
+      - name: Build and install plugin
+        run: |
+          CGO_ENABLED=0 go run build/make.go --distro
+          rm -rf "$HOME/.gauge/plugins/allure-report"
+          gauge install allure-report --file deploy/allure-report-*-linux.x86_64.zip
+
+      - name: Run example project
+        working-directory: examples/gauge-js
+        run: |
+          gauge run specs
+          test -f reports/allure-results/environment.properties
+          test -f reports/allure-report/index.html
+          grep -q '"failed":1' reports/allure-report/summary.json

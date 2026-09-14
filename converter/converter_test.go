@@ -106,6 +106,20 @@ func TestConvertVerificationFailureIsBroken(t *testing.T) {
 	}
 }
 
+func TestRetriesDoNotMarkFlakyByDefault(t *testing.T) {
+	scn := passedScenario("重试场景")
+	scn.RetriesCount = 1
+	model := Convert(sampleSuite(scn), testOpts(t))
+	if model.Results[0].StatusDetails != nil && model.Results[0].StatusDetails.Flaky {
+		t.Fatal("retriesCount=1 should not mark test as flaky")
+	}
+	scn.RetriesCount = 2
+	model = Convert(sampleSuite(scn), testOpts(t))
+	if model.Results[0].StatusDetails == nil || !model.Results[0].StatusDetails.Flaky {
+		t.Fatal("retriesCount>1 should mark test as flaky")
+	}
+}
+
 func TestConvertSkippedScenario(t *testing.T) {
 	scn := &gauge_messages.ProtoScenario{
 		ScenarioHeading: "尚未实现",

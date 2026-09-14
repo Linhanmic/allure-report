@@ -1,0 +1,8 @@
+{
+  "name": "gauge-allure-example",
+  "private": true,
+  "description": "Gauge JS sample project used to exercise the Allure 3 report plugin",
+  "scripts": {
+    "test": "gauge run specs"
+  }
+}

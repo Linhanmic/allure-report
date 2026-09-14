@@ -1,6 +1,6 @@
 # allure-report
 
-Gauge 测试框架的 **Allure 3** 报告插件。执行规格后会把 Suite 结果转换成 Allure 结果文件（`*-result.json`），并在本机有 Allure 3 / Node.js 时生成 Awesome HTML 报告。
+Gauge 测试框架的 **Allure 3** 报告插件。执行规格后会把 Suite 结果转换成 Allure 结果文件（`*-result.json`），并优先使用插件内置的 Allure 3 生成 Awesome HTML 报告（离线可用，仅需本机 Node.js）。
 
 ## 功能
 
@@ -8,7 +8,7 @@ Gauge 测试框架的 **Allure 3** 报告插件。执行规格后会把 Suite �
 - 将 Specification / Scenario / Step / Concept / 数据表场景映射为 Allure 用例与步骤
 - 支持截图、自定义消息、Hook、标签、失败堆栈
 - 写出兼容 Allure 2/3 的 `allure-results`
-- 自动调用 Allure 3 生成 HTML 报告（默认单文件 `index.html`）
+- 插件包内置 Allure 3 CLI，离线环境只需 Node.js 即可生成 HTML（默认单文件 `index.html`）
 
 ## 安装
 
@@ -21,8 +21,21 @@ go run build/make.go --install
 或先打包 zip，再离线安装：
 
 ```bash
-go run build/make.go --distro
-gauge install allure-report --file deploy/allure-report-0.1.0-<os>.<arch>.zip
+make distro
+gauge install allure-report --file deploy/allure-report-0.1.1-<os>.<arch>.zip
+```
+
+跨平台打包：
+
+```bash
+make distro-all
+```
+
+发布到 GitHub Release（推送 `v*` 标签后自动上传 `deploy/*.zip`）：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 在 Gauge 项目的 `manifest.json` 中加入插件：
@@ -47,7 +60,17 @@ gauge run specs
 | `reports/allure-results/` | Allure 原始结果 |
 | `reports/allure-report/` | Allure 3 HTML 报告 |
 
-如果本机已安装 Allure 3 CLI（`allure`）或 Node.js（`npx`），插件会自动生成 HTML。否则仍会保留 `allure-results`，可稍后执行：
+### 离线报告生成
+
+插件 zip 内已包含 `bundled/node_modules/allure`（Allure 3.16.1）。安装插件后，只要本机有 **Node.js**（`node` 在 PATH 中），即可在完全离线环境下生成 HTML，无需联网下载或全局安装 `allure` / `npx`。
+
+生成优先级：
+
+1. 插件内置 Allure（`node bundled/generate.mjs`）
+2. 系统 `allure` CLI（若已安装）
+3. `npx allure@3`（需联网）
+
+若未安装 Node.js，仍会保留 `allure-results`，可稍后在有 Node 的机器上生成：
 
 ```bash
 npx --yes allure@3 awesome reports/allure-results --output reports/allure-report --single-file --report-language zh
@@ -129,11 +152,24 @@ tags: severity:critical, owner:qa, issue:BUG-12
 - 断言失败 → `failed`；验证/Hook 异常 → `broken`；跳过 → `skipped`
 - Gauge 截图文件与自定义消息 → attachments / log steps
 
+## 示例项目
+
+仓库内提供了不依赖浏览器的 Gauge JS 示例：
+
+```bash
+make install
+cd examples/gauge-js
+gauge run specs
+```
+
+示例会生成包含通过、失败、跳过、Concept、数据表、标签与截图附件的 Allure 报告。
+
 ## 开发
 
 ```bash
 go test ./...
-go run build/make.go
+make build
+make example
 ```
 
-要求 Go 1.22+。生成 HTML 报告需要 Allure 3 或 Node.js。
+要求 Go 1.22+。打包前会在 `bundled/` 执行 `npm ci` 下载 Allure 3 依赖；生成 HTML 报告需要 Node.js（优先使用内置 Allure）。

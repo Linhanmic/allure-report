@@ -32,6 +32,8 @@ var projectRoot string
 
 func createReport(suiteResult *gauge_messages.SuiteExecutionResult) {
 	cfg := loadConfig()
+	logger.Debug("Config: results=%s report=%s overwrite=%v custom=%v", cfg.ResultsDir, cfg.ReportDir, shouldOverwriteReports(), cfg.UseCustomDirs)
+
 	if err := prepareReportDirs(cfg, cfg.ReportsRoot); err != nil {
 		logger.Fatal("Failed to prepare report directories: %s", err)
 	}
@@ -39,6 +41,9 @@ func createReport(suiteResult *gauge_messages.SuiteExecutionResult) {
 	screenshotsDir := os.Getenv(gaugeScreenshotsDirEnvName)
 	if screenshotsDir != "" && !filepath.IsAbs(screenshotsDir) && projectRoot != "" {
 		screenshotsDir = filepath.Join(projectRoot, screenshotsDir)
+	}
+	if screenshotsDir != "" {
+		logger.Debug("Screenshots directory: %s", screenshotsDir)
 	}
 
 	model := converter.Convert(suiteResult.GetSuiteResult(), converter.Options{
@@ -54,6 +59,7 @@ func createReport(suiteResult *gauge_messages.SuiteExecutionResult) {
 	logger.Info("Successfully generated allure-results to => %s", cfg.ResultsDir)
 
 	if !cfg.GenerateHTML {
+		logger.Debug("HTML generation disabled, skipping")
 		return
 	}
 	result, err := generator.Generate(generator.Options{
@@ -123,7 +129,7 @@ func loadConfig() pluginConfig {
 		reportDir = filepath.Join(projectRoot, reportDir)
 	}
 
-	return pluginConfig{
+	cfg := pluginConfig{
 		ReportsRoot:   reportsDir,
 		ResultsDir:    resultsDir,
 		ReportDir:     reportDir,
@@ -135,6 +141,18 @@ func loadConfig() pluginConfig {
 		SingleFile:    envBool("allure_report_single_file", true),
 		GenerateHTML:  envBool("allure_report_generate", true),
 		UseCustomDirs: useCustom,
+	}
+	validateConfig(cfg)
+	return cfg
+}
+
+func validateConfig(cfg pluginConfig) {
+	validThemes := map[string]bool{"light": true, "dark": true, "auto": true}
+	if !validThemes[cfg.Theme] {
+		logger.Warn("Invalid allure_report_theme '%s', using 'auto'. Valid values: light, dark, auto", cfg.Theme)
+	}
+	if cfg.ResultsDir == cfg.ReportDir && cfg.ResultsDir != "" {
+		logger.Warn("Results dir and report dir are the same: %s", cfg.ResultsDir)
 	}
 }
 

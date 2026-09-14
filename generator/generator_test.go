@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -30,7 +31,7 @@ func TestGenerateUsesAllureAwesome(t *testing.T) {
 		},
 		Command: func(name string, args ...string) *exec.Cmd {
 			got = append([]string{name}, args...)
-			return exec.Command("true")
+			return noopCommand()
 		},
 	})
 	if err != nil {
@@ -54,4 +55,11 @@ func TestGenerateFallsBackWhenMissing(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when allure and npx are missing")
 	}
+}
+
+func noopCommand() *exec.Cmd {
+	if runtime.GOOS == "windows" {
+		return exec.Command("cmd", "/c", "exit", "0")
+	}
+	return exec.Command("true")
 }

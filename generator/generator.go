@@ -66,6 +66,7 @@ func Generate(opts Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer os.Remove(configPath)
 
 	attempts := commands(opts, configPath)
 	if len(attempts) == 0 {

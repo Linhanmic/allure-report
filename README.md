@@ -93,8 +93,11 @@ allure_report_name = Gauge Allure Report
 | `allure_report_generate` | 是否生成 Allure 3 HTML | `true` |
 | `allure_report_single_file` | 生成单文件 HTML | `true` |
 | `allure_report_language` | 报告语言 | `zh` |
+| `allure_report_theme` | 报告主题：`light` / `dark` / `auto` | `auto` |
+| `allure_report_name` | 报告标题 | `Gauge Allure Report` |
 | `allure_results_dir` | 自定义结果目录（跳过内置目录规则） | 空 |
 | `allure_report_dir` | 自定义 HTML 目录 | 空 |
+| `allure_archive_max_count` | 保留的归档数量（0 表示不限制） | `0` |
 
 ## 截图
 

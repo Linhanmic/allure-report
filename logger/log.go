@@ -25,6 +25,10 @@ func Info(message string, args ...interface{}) {
 	write(&LogInfo{LogLevel: "info", Message: fmt.Sprintf(message, args...)})
 }
 
+func Warn(message string, args ...interface{}) {
+	write(&LogInfo{LogLevel: "warning", Message: fmt.Sprintf(message, args...)})
+}
+
 func Error(message string, args ...interface{}) {
 	write(&LogInfo{LogLevel: "error", Message: fmt.Sprintf(message, args...)})
 }

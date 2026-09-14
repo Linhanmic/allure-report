@@ -1,0 +1,22 @@
+{
+  "id": "allure-report",
+  "version": "0.1.0",
+  "name": "Allure Report",
+  "description": "Allure 3 reporting plugin for Gauge",
+  "install": {
+    "windows": [],
+    "linux": [],
+    "darwin": []
+  },
+  "command": {
+    "windows": ["bin/allure-report"],
+    "linux": ["bin/allure-report"],
+    "darwin": ["bin/allure-report"]
+  },
+  "scope": ["Execution"],
+  "gaugeVersionSupport": {
+    "minimum": "1.6.22",
+    "maximum": ""
+  },
+  "capabilities": ["grpc_support"]
+}

@@ -413,3 +413,125 @@ func hasParam(params []Parameter, name, value string) bool {
 	}
 	return false
 }
+
+func TestSpecNestingFlat(t *testing.T) {
+	pSuite, sSuite, subSuite := specNesting("specs/login.spec")
+	if pSuite != "" {
+		t.Fatalf("parentSuite: %s", pSuite)
+	}
+	if sSuite != "login" {
+		t.Fatalf("suite: %s", sSuite)
+	}
+	if subSuite != "" {
+		t.Fatalf("subSuite: %s", subSuite)
+	}
+}
+
+func TestSpecNestingOneLevel(t *testing.T) {
+	pSuite, sSuite, subSuite := specNesting("specs/auth/login.spec")
+	if pSuite != "auth" {
+		t.Fatalf("parentSuite: %s", pSuite)
+	}
+	if sSuite != "login" {
+		t.Fatalf("suite: %s", sSuite)
+	}
+	if subSuite != "" {
+		t.Fatalf("subSuite: %s", subSuite)
+	}
+}
+
+func TestSpecNestingTwoLevels(t *testing.T) {
+	pSuite, sSuite, subSuite := specNesting("specs/api/users/create.spec")
+	if pSuite != "api" {
+		t.Fatalf("parentSuite: %s", pSuite)
+	}
+	if sSuite != "users" {
+		t.Fatalf("suite: %s", sSuite)
+	}
+	if subSuite != "create" {
+		t.Fatalf("subSuite: %s", subSuite)
+	}
+}
+
+func TestSpecNestingDeepNesting(t *testing.T) {
+	pSuite, sSuite, subSuite := specNesting("specs/a/b/c/d.spec")
+	if pSuite != "a" {
+		t.Fatalf("parentSuite: %s", pSuite)
+	}
+	if sSuite != "b" {
+		t.Fatalf("suite: %s", sSuite)
+	}
+	if subSuite != "c/d" {
+		t.Fatalf("subSuite: %s", subSuite)
+	}
+}
+
+func TestConvertNestedDirectoryLabels(t *testing.T) {
+	suite := &gauge_messages.ProtoSuiteResult{
+		ProjectName:   "demo",
+		TimestampISO:  "2026-09-14T06:00:00Z",
+		ExecutionTime: 120,
+		SpecResults: []*gauge_messages.ProtoSpecResult{{
+			TimestampISO:  "2026-09-14T06:00:00Z",
+			ExecutionTime: 120,
+			ProtoSpec: &gauge_messages.ProtoSpec{
+				SpecHeading: "登录验证",
+				FileName:    "specs/auth/login.spec",
+				Items: []*gauge_messages.ProtoItem{{
+					ItemType: gauge_messages.ProtoItem_Scenario,
+					Scenario: passedScenario("登录成功"),
+				}},
+			},
+		}},
+	}
+	model := Convert(suite, testOpts(t))
+	tr := model.Results[0]
+	assertLabel(t, tr.Labels, "parentSuite", "auth")
+	assertLabel(t, tr.Labels, "suite", "login")
+	assertLabel(t, tr.Labels, "feature", "登录验证")
+	assertLabel(t, tr.Labels, "package", "specs/auth/login.spec")
+}
+
+func TestConvertNestedDirectoryWithSubSuite(t *testing.T) {
+	suite := &gauge_messages.ProtoSuiteResult{
+		ProjectName:   "demo",
+		TimestampISO:  "2026-09-14T06:00:00Z",
+		ExecutionTime: 120,
+		SpecResults: []*gauge_messages.ProtoSpecResult{{
+			TimestampISO:  "2026-09-14T06:00:00Z",
+			ExecutionTime: 120,
+			ProtoSpec: &gauge_messages.ProtoSpec{
+				SpecHeading: "创建用户",
+				FileName:    "specs/api/users/create.spec",
+				Items: []*gauge_messages.ProtoItem{{
+					ItemType: gauge_messages.ProtoItem_Scenario,
+					Scenario: passedScenario("创建成功"),
+				}},
+			},
+		}},
+	}
+	model := Convert(suite, testOpts(t))
+	tr := model.Results[0]
+	assertLabel(t, tr.Labels, "parentSuite", "api")
+	assertLabel(t, tr.Labels, "suite", "users")
+	assertLabel(t, tr.Labels, "subSuite", "create")
+	assertLabel(t, tr.Labels, "package", "specs/api/users/create.spec")
+}
+
+func TestConvertFlatSpecUsesSpecHeading(t *testing.T) {
+	suite := sampleSuite(passedScenario("登录成功"))
+	model := Convert(suite, testOpts(t))
+	tr := model.Results[0]
+	assertLabel(t, tr.Labels, "parentSuite", "demo")
+	assertLabel(t, tr.Labels, "suite", "用户认证")
+}
+
+func TestFullNameStripsSpecsPrefix(t *testing.T) {
+	spec := &gauge_messages.ProtoSpec{
+		FileName: "specs/auth/login.spec",
+	}
+	got := fullName(spec, "登录成功")
+	if got != "auth/login.spec#登录成功" {
+		t.Fatalf("fullName: %s", got)
+	}
+}

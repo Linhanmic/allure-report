@@ -255,16 +255,30 @@ func scenarioLabels(spec *gauge_messages.ProtoSpec, scenario *gauge_messages.Pro
 	if opts.Host != "" {
 		labels = append(labels, Label{Name: "host", Value: opts.Host})
 	}
-	parent := firstNonEmpty(suite.GetProjectName(), "Gauge")
-	labels = append(labels, Label{Name: "parentSuite", Value: parent})
 	if spec != nil {
-		name := specName(spec)
-		labels = append(labels,
-			Label{Name: "suite", Value: name},
-			Label{Name: "feature", Value: name},
-			Label{Name: "package", Value: posixPath(spec.GetFileName())},
-			Label{Name: "testClass", Value: name},
-		)
+		pSuite, sSuite, subSuite := specNesting(spec.GetFileName())
+		specLabel := specName(spec)
+		labels = append(labels, Label{Name: "parentSuite", Value: firstNonEmpty(pSuite, suite.GetProjectName(), "Gauge")})
+		if pSuite != "" || subSuite != "" {
+			labels = append(labels,
+				Label{Name: "suite", Value: firstNonEmpty(sSuite, specLabel)},
+				Label{Name: "feature", Value: specLabel},
+				Label{Name: "package", Value: posixPath(spec.GetFileName())},
+				Label{Name: "testClass", Value: firstNonEmpty(sSuite, specLabel)},
+			)
+			if subSuite != "" {
+				labels = append(labels, Label{Name: "subSuite", Value: subSuite})
+			}
+		} else {
+			labels = append(labels,
+				Label{Name: "suite", Value: specLabel},
+				Label{Name: "feature", Value: specLabel},
+				Label{Name: "package", Value: posixPath(spec.GetFileName())},
+				Label{Name: "testClass", Value: specLabel},
+			)
+		}
+	} else {
+		labels = append(labels, Label{Name: "parentSuite", Value: firstNonEmpty(suite.GetProjectName(), "Gauge")})
 	}
 	if scenario != nil {
 		labels = append(labels, Label{Name: "testMethod", Value: scenario.GetScenarioHeading()})
@@ -456,6 +470,9 @@ func fullName(spec *gauge_messages.ProtoSpec, scenario string) string {
 	file := ""
 	if spec != nil {
 		file = posixPath(spec.GetFileName())
+		file = strings.TrimPrefix(file, "specs/")
+		file = strings.TrimPrefix(file, "./specs/")
+		file = strings.TrimPrefix(file, "/")
 		if file == "" {
 			file = specName(spec)
 		}
@@ -733,6 +750,39 @@ func timeWindow(iso string, durationMs int64, fallback time.Time) (int64, int64)
 
 func posixPath(path string) string {
 	return strings.ReplaceAll(path, "\\", "/")
+}
+
+func specNesting(specPath string) (parentSuite, suite, subSuite string) {
+	p := posixPath(specPath)
+	p = strings.TrimPrefix(p, "specs/")
+	p = strings.TrimPrefix(p, "./specs/")
+	p = strings.TrimPrefix(p, "/")
+
+	parts := strings.Split(p, "/")
+	if len(parts) == 0 {
+		return
+	}
+
+	filename := parts[len(parts)-1]
+	leaf := strings.TrimSuffix(filename, filepath.Ext(filename))
+
+	dirs := parts[:len(parts)-1]
+	switch len(dirs) {
+	case 0:
+		suite = leaf
+	case 1:
+		parentSuite = dirs[0]
+		suite = leaf
+	case 2:
+		parentSuite = dirs[0]
+		suite = dirs[1]
+		subSuite = leaf
+	default:
+		parentSuite = dirs[0]
+		suite = dirs[1]
+		subSuite = strings.TrimSuffix(strings.Join(append(dirs[2:], leaf), "/"), "/")
+	}
+	return
 }
 
 func firstNonEmpty(values ...string) string {

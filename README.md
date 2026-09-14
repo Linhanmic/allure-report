@@ -1,6 +1,6 @@
 # allure-report
 
-Gauge 测试框架的 **Allure 3** 报告插件。执行规格后会把 Suite 结果转换成 Allure 结果文件（`*-result.json`），并调用本机 Allure 3 CLI 生成单文件 Awesome HTML 报告。
+Gauge 测试框架的 **Allure 3** 报告插件。执行规格后会把 Suite 结果转换成 Allure 结果文件（`*-result.json`），并调用本机 Allure 3 CLI 生成多种类型的 HTML 报告。
 
 ## 功能
 
@@ -9,6 +9,8 @@ Gauge 测试框架的 **Allure 3** 报告插件。执行规格后会把 Suite �
 - 支持 Gauge screenshot 插件截图、自定义消息、Hook、标签、失败堆栈
 - 写出兼容 Allure 2/3 的 `allure-results`，截图复制进结果目录避免丢失
 - 参考 html-report 支持覆盖 / 历史两种报告模式，覆盖前自动归档
+- 支持生成多种类型的报告：Awesome、Classic、Allure2、Dashboard、CSV、Log
+- 支持历史记录功能，包括趋势图表和不稳定测试检测
 - 默认生成单文件 HTML（`index.html`），便于本地双击打开
 
 ## 安装
@@ -23,7 +25,7 @@ go run build/make.go --install
 
 ```bash
 make distro
-gauge install allure-report --file deploy/allure-report-0.2.0-<os>.<arch>.zip
+gauge install allure-report --file deploy/allure-report-0.3.0-<os>.<arch>.zip
 ```
 
 在 Gauge 项目的 `manifest.json` 中加入插件：
@@ -98,6 +100,81 @@ allure_report_name = Gauge Allure Report
 | `allure_results_dir` | 自定义结果目录（跳过内置目录规则） | 空 |
 | `allure_report_dir` | 自定义 HTML 目录 | 空 |
 | `allure_archive_max_count` | 保留的归档数量（0 表示不限制） | `0` |
+
+## 多报告配置
+
+支持生成多种类型的 Allure 3 报告，通过 `allure_reports` 配置项指定启用的报告类型。
+
+### 可用报告类型
+
+| 类型 | 说明 | 默认启用 |
+| --- | --- | --- |
+| awesome | 现代 UI（推荐） | 是 |
+| classic | 经典样式 | 否 |
+| allure2 | Allure 2 样式 | 否 |
+| dashboard | 仪表板视图 | 否 |
+| csv | CSV 导出 | 否 |
+| log | 控制台日志 | 否 |
+
+### 多报告配置示例
+
+```properties
+# 启用多个报告（逗号分隔）
+allure_reports = awesome,classic,dashboard
+
+# 各报告类型开关
+allure_awesome_enabled = true
+allure_classic_enabled = true
+allure_dashboard_enabled = true
+allure_allure2_enabled = false
+allure_csv_enabled = false
+
+# 各报告类型名称
+allure_awesome_name = Gauge Awesome Report
+allure_classic_name = Gauge Classic Report
+allure_dashboard_name = Gauge Dashboard
+
+# Awesome 插件特有配置
+allure_awesome_group_by = epic,feature,story
+```
+
+### 多报告目录结构
+
+```
+reports/allure-report/
+├── awesome/           # Awesome 报告
+│   └── index.html
+├── classic/           # Classic 报告
+│   └── index.html
+└── dashboard/         # Dashboard 报告
+    └── index.html
+```
+
+## 历史记录配置
+
+通过 `allure_history_path` 配置启用历史记录功能，支持趋势图表和不稳定测试检测。
+
+```properties
+# 历史记录配置
+allure_history_path = ./history.jsonl
+allure_history_append = true
+allure_history_limit = 0
+```
+
+| 属性 | 说明 | 默认值 |
+| --- | --- | --- |
+| `allure_history_path` | 历史记录文件路径（JSONL 格式） | 空（不启用） |
+| `allure_history_append` | 是否追加历史记录 | `true` |
+| `allure_history_limit` | 历史记录限制数量（0 表示不限制） | `0` |
+
+### 历史记录功能
+
+启用历史记录后，报告将包含：
+
+- **趋势图表** - 显示测试结果随时间的变化趋势
+- **不稳定测试检测** - 识别在多次运行中状态变化的测试
+- **历史比较** - 与之前的运行结果进行比较
+- **状态转换** - 跟踪测试状态的变化（如从 passed 变为 failed）
 
 ## 截图
 

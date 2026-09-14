@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,14 @@ const (
 	gaugeProjectRootEnv         = "GAUGE_PROJECT_ROOT"
 	timeFormat                  = "2006-01-02_15.04.05"
 	dirPermissions              = 0o755
+
+	// 报告插件类型常量
+	PluginAwesome   = "awesome"
+	PluginClassic   = "classic"
+	PluginAllure2   = "allure2"
+	PluginDashboard = "dashboard"
+	PluginCSV       = "csv"
+	PluginLog       = "log"
 )
 
 var projectRoot string
@@ -62,13 +71,38 @@ func createReport(suiteResult *gauge_messages.SuiteExecutionResult) {
 		logger.Debug("HTML generation disabled, skipping")
 		return
 	}
+
+	// 解析多报告插件配置
+	plugins := parsePlugins(cfg)
+	if len(plugins) == 0 {
+		logger.Warn("No report plugins enabled, using default awesome plugin")
+		plugins = []generator.ReportPlugin{
+			{
+				ID:   "awesome",
+				Type: PluginAwesome,
+				Options: map[string]interface{}{
+					"reportName":     cfg.ReportName,
+					"singleFile":     cfg.SingleFile,
+					"reportLanguage": cfg.Language,
+					"theme":          cfg.Theme,
+					"open":           false,
+				},
+			},
+		}
+	}
+
+	// 生成报告
 	result, err := generator.Generate(generator.Options{
-		ResultsDir: cfg.ResultsDir,
-		ReportDir:  cfg.ReportDir,
-		ReportName: cfg.ReportName,
-		Language:   cfg.Language,
-		Theme:      cfg.Theme,
-		SingleFile: cfg.SingleFile,
+		ResultsDir:    cfg.ResultsDir,
+		ReportDir:     cfg.ReportDir,
+		ReportName:    cfg.ReportName,
+		Language:      cfg.Language,
+		Theme:         cfg.Theme,
+		SingleFile:    cfg.SingleFile,
+		HistoryPath:   cfg.HistoryPath,
+		AppendHistory: cfg.AppendHistory,
+		HistoryLimit:  cfg.HistoryLimit,
+		Plugins:       plugins,
 	})
 	if err != nil {
 		logger.Error("Allure 3 HTML report was not generated: %s", err)
@@ -92,6 +126,9 @@ type pluginConfig struct {
 	SingleFile     bool
 	GenerateHTML   bool
 	UseCustomDirs  bool
+	HistoryPath    string
+	AppendHistory  bool
+	HistoryLimit   int
 }
 
 func loadConfig() pluginConfig {
@@ -141,9 +178,89 @@ func loadConfig() pluginConfig {
 		SingleFile:    envBool("allure_report_single_file", true),
 		GenerateHTML:  envBool("allure_report_generate", true),
 		UseCustomDirs: useCustom,
+		HistoryPath:   envOr("allure_history_path", ""),
+		AppendHistory: envBool("allure_history_append", true),
+		HistoryLimit:  envInt("allure_history_limit", 0),
 	}
 	validateConfig(cfg)
 	return cfg
+}
+
+// parsePlugins 解析多报告插件配置
+func parsePlugins(cfg pluginConfig) []generator.ReportPlugin {
+	// 获取启用的报告类型列表
+	reportsStr := envOr("allure_reports", "awesome")
+	reportTypes := strings.Split(reportsStr, ",")
+
+	var plugins []generator.ReportPlugin
+	pluginCount := make(map[string]int)
+
+	for _, reportType := range reportTypes {
+		reportType = strings.TrimSpace(reportType)
+		if reportType == "" {
+			continue
+		}
+
+		// 检查是否启用
+		if !envBool("allure_"+reportType+"_enabled", true) {
+			continue
+		}
+
+		// 生成插件 ID
+		pluginID := reportType
+		if pluginCount[reportType] > 0 {
+			pluginID = fmt.Sprintf("%s_%d", reportType, pluginCount[reportType])
+		}
+		pluginCount[reportType]++
+
+		plugin := generator.ReportPlugin{
+			ID:      pluginID,
+			Type:    reportType,
+			Import:  getPluginImport(reportType),
+			Options: buildPluginOptions(reportType, cfg),
+		}
+
+		plugins = append(plugins, plugin)
+	}
+
+	return plugins
+}
+
+// getPluginImport 返回插件的模块路径
+func getPluginImport(pluginType string) string {
+	switch pluginType {
+	case PluginAwesome:
+		return "@allurereport/plugin-awesome"
+	default:
+		return "" // 内置插件不需要 import
+	}
+}
+
+// buildPluginOptions 构建插件选项
+func buildPluginOptions(pluginType string, cfg pluginConfig) map[string]interface{} {
+	options := map[string]interface{}{
+		"reportName":     envOr("allure_"+pluginType+"_name", cfg.ReportName),
+		"singleFile":     cfg.SingleFile,
+		"reportLanguage": cfg.Language,
+	}
+
+	switch pluginType {
+	case PluginAwesome:
+		options["theme"] = cfg.Theme
+		options["open"] = false
+		// 支持 groupBy 配置
+		if groupBy := os.Getenv("allure_awesome_group_by"); groupBy != "" {
+			options["groupBy"] = strings.Split(groupBy, ",")
+		}
+	case PluginClassic, PluginAllure2, PluginDashboard:
+		// 这些插件使用基本选项
+	case PluginCSV:
+		options["fileName"] = envOr("allure_csv_filename", "report.csv")
+	case PluginLog:
+		options["groupBy"] = "none"
+	}
+
+	return options
 }
 
 func validateConfig(cfg pluginConfig) {

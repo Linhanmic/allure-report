@@ -13,6 +13,49 @@ Gauge 测试框架的 **Allure 3** 报告插件。执行规格后会把 Suite �
 - 支持历史记录功能，包括趋势图表和不稳定测试检测
 - 默认生成单文件 HTML（`index.html`），便于本地双击打开
 
+## 层级标签映射（v0.4.0+）
+
+插件自动将 Gauge 规格文件路径映射为 Allure 层级标签，支持 Packages 视图分组：
+
+### 映射规则
+
+| 标签 | 来源 | 示例 |
+| --- | --- | --- |
+| `parentSuite` | specs/ 下的目录路径（点分连接） | `api.users` |
+| `suite` | 规格标题（人类可读） | "用户管理" |
+| `feature` | 规格标题 | "用户管理" |
+| `package` | 目录 + 文件名的点分路径 | `api.users.create` |
+| `testClass` | 规格文件名（不含扩展名） | `create` |
+| `testMethod` | 场景标题 | "创建新用户" |
+
+### 目录结构示例
+
+```
+specs/
+├── login.spec                  # parentSuite: (无), suite: "用户认证"
+├── checkout.spec               # parentSuite: (无), suite: "订单结算"
+└── api/
+    └── users/
+        ├── create.spec         # parentSuite: "api.users", suite: "用户管理"
+        └── profile/
+            └── settings.spec   # parentSuite: "api.users.profile", suite: "用户设置"
+```
+
+### 显式标签覆盖
+
+使用 Gauge 标签可以覆盖自动推导的层级标签：
+
+```markdown
+# 用户管理
+tags: feature:账户, suite:用户管理
+
+## 创建新用户
+* 打开用户管理页面
+* 创建新用户
+```
+
+显式标签（`feature:`、`suite:`、`package:` 等）优先于自动推导，只填补空缺。
+
 ## 安装
 
 从源码编译并安装到 Gauge 插件目录：

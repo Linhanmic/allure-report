@@ -58,3 +58,64 @@ step("选择支付方式 <method>", function (method) {
 step("确认订单", function () {
   assert.ok(true);
 });
+
+step("打开用户管理页面", function () {
+  gauge.message("用户管理页面加载完成");
+});
+
+step("点击创建用户按钮", function () {
+  gauge.message("点击创建用户按钮");
+});
+
+step("输入用户名 <user>", function (user) {
+  gauge.message("输入用户名: " + user);
+});
+
+step("输入邮箱 <email>", function (email) {
+  gauge.message("输入邮箱: " + email);
+});
+
+step("点击保存按钮", function () {
+  gauge.message("点击保存按钮");
+});
+
+step("验证用户创建成功", function () {
+  assert.ok(true);
+});
+
+step("验证错误提示 <msg>", function (msg) {
+  gauge.message("验证错误提示: " + msg);
+  assert.ok(msg.length > 0);
+});
+
+step("打开用户设置页面", function () {
+  gauge.message("用户设置页面加载完成");
+});
+
+step("修改用户名 <user>", function (user) {
+  gauge.message("修改用户名: " + user);
+});
+
+step("修改邮箱 <email>", function (email) {
+  gauge.message("修改邮箱: " + email);
+});
+
+step("验证个人信息修改成功", function () {
+  assert.ok(true);
+});
+
+step("输入当前密码 <password>", function (password) {
+  gauge.message("输入当前密码");
+});
+
+step("输入新密码 <password>", function (password) {
+  gauge.message("输入新密码");
+});
+
+step("确认新密码 <password>", function (password) {
+  gauge.message("确认新密码");
+});
+
+step("验证密码修改成功", function () {
+  assert.ok(true);
+});

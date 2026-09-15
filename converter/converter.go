@@ -178,9 +178,8 @@ func convertScenario(scenario *gauge_messages.ProtoScenario, tableDriven *gauge_
 	test.TestCaseID = md5Hex(test.FullName)
 	test.HistoryID = historyID(test.TestCaseID, params)
 
-	test.Labels = scenarioLabels(spec, scenario, suite, opts)
 	parsed := parseTags(mergeTags(spec, scenario), opts.IssuePattern, opts.TMSPattern)
-	test.Labels = append(test.Labels, parsed.labels...)
+	test.Labels = scenarioLabels(spec, scenario, suite, opts, parsed.labels)
 	test.Links = append(test.Links, parsed.links...)
 
 	if spec != nil && spec.GetFileName() != "" {
@@ -240,48 +239,66 @@ func parseErrorTest(specResult *gauge_messages.ProtoSpecResult, suite *gauge_mes
 			Message: "Parse/Validation Errors",
 			Trace:   msg,
 		},
-		Labels: scenarioLabels(specResult.GetProtoSpec(), nil, suite, opts),
+		Labels: scenarioLabels(specResult.GetProtoSpec(), nil, suite, opts, nil),
 	}
 	test.TestCaseID = md5Hex(test.FullName)
 	test.HistoryID = historyID(test.TestCaseID, nil)
 	return test
 }
 
-func scenarioLabels(spec *gauge_messages.ProtoSpec, scenario *gauge_messages.ProtoScenario, suite *gauge_messages.ProtoSuiteResult, opts Options) []Label {
+// scenarioLabels builds the label set for a test result.
+//
+// 层级映射（packages 模式，目录路径从 specs/ 下一级开始，点分连接）：
+//   - parentSuite: spec 所在目录点分路径（如 api.admin）；根目录 spec 不输出
+//   - suite:       spec 标题
+//   - feature:     spec 标题
+//   - package:     目录 + 文件名的点分路径（如 api.admin.user_mgmt）
+//   - testClass:   spec 文件名（不含扩展名）
+//   - testMethod:  场景标题
+//
+// 显式标签（feature:、suite:、package: 等）优先于自动推导，只填补空缺。
+func scenarioLabels(spec *gauge_messages.ProtoSpec, scenario *gauge_messages.ProtoScenario, suite *gauge_messages.ProtoSuiteResult, opts Options, explicit []Label) []Label {
 	labels := []Label{
 		{Name: "framework", Value: "gauge"},
 		{Name: "language", Value: "gauge"},
+	}
+	labels = append(labels, explicit...)
+	has := func(name string) bool {
+		for _, l := range labels {
+			if l.Name == name {
+				return true
+			}
+		}
+		return false
 	}
 	if opts.Host != "" {
 		labels = append(labels, Label{Name: "host", Value: opts.Host})
 	}
 	if spec != nil {
-		pSuite, sSuite, subSuite := specNesting(spec.GetFileName())
+		dirs, fileBase := specPathParts(spec.GetFileName())
 		specLabel := specName(spec)
-		labels = append(labels, Label{Name: "parentSuite", Value: firstNonEmpty(pSuite, suite.GetProjectName(), "Gauge")})
-		if pSuite != "" || subSuite != "" {
-			labels = append(labels,
-				Label{Name: "suite", Value: firstNonEmpty(sSuite, specLabel)},
-				Label{Name: "feature", Value: specLabel},
-				Label{Name: "package", Value: posixPath(spec.GetFileName())},
-				Label{Name: "testClass", Value: firstNonEmpty(sSuite, specLabel)},
-			)
-			if subSuite != "" {
-				labels = append(labels, Label{Name: "subSuite", Value: subSuite})
-			}
-		} else {
-			labels = append(labels,
-				Label{Name: "suite", Value: specLabel},
-				Label{Name: "feature", Value: specLabel},
-				Label{Name: "package", Value: posixPath(spec.GetFileName())},
-				Label{Name: "testClass", Value: specLabel},
-			)
+		if dirs != "" && !has("parentSuite") {
+			labels = append(labels, Label{Name: "parentSuite", Value: dirs})
 		}
-	} else {
-		labels = append(labels, Label{Name: "parentSuite", Value: firstNonEmpty(suite.GetProjectName(), "Gauge")})
+		if !has("suite") {
+			labels = append(labels, Label{Name: "suite", Value: specLabel})
+		}
+		if !has("feature") {
+			labels = append(labels, Label{Name: "feature", Value: specLabel})
+		}
+		if !has("package") {
+			labels = append(labels, Label{Name: "package", Value: packageLabel(spec.GetFileName())})
+		}
+		if !has("testClass") {
+			labels = append(labels, Label{Name: "testClass", Value: firstNonEmpty(fileBase, specLabel)})
+		}
+	} else if !has("parentSuite") && suite != nil && suite.GetProjectName() != "" {
+		labels = append(labels, Label{Name: "parentSuite", Value: suite.GetProjectName()})
 	}
 	if scenario != nil {
-		labels = append(labels, Label{Name: "testMethod", Value: scenario.GetScenarioHeading()})
+		if !has("testMethod") {
+			labels = append(labels, Label{Name: "testMethod", Value: scenario.GetScenarioHeading()})
+		}
 		if scenario.GetRetriesCount() > 1 {
 			labels = append(labels, Label{Name: "tag", Value: fmt.Sprintf("retries:%d", scenario.GetRetriesCount())})
 		}
@@ -752,37 +769,40 @@ func posixPath(path string) string {
 	return strings.ReplaceAll(path, "\\", "/")
 }
 
-func specNesting(specPath string) (parentSuite, suite, subSuite string) {
-	p := posixPath(specPath)
-	p = strings.TrimPrefix(p, "specs/")
-	p = strings.TrimPrefix(p, "./specs/")
-	p = strings.TrimPrefix(p, "/")
-
-	parts := strings.Split(p, "/")
-	if len(parts) == 0 {
-		return
-	}
-
-	filename := parts[len(parts)-1]
-	leaf := strings.TrimSuffix(filename, filepath.Ext(filename))
-
-	dirs := parts[:len(parts)-1]
-	switch len(dirs) {
-	case 0:
-		suite = leaf
-	case 1:
-		parentSuite = dirs[0]
-		suite = leaf
-	case 2:
-		parentSuite = dirs[0]
-		suite = dirs[1]
-		subSuite = leaf
+// packageLabel converts a spec file path into a dot-separated package name
+// following Allure's package naming convention, so common prefixes are shown
+// as parent packages in the Packages hierarchy (groupBy: package/testClass/testMethod).
+func packageLabel(specPath string) string {
+	dirs, fileBase := specPathParts(specPath)
+	switch {
+	case dirs == "":
+		return fileBase
+	case fileBase == "" || fileBase == ".":
+		return dirs
 	default:
-		parentSuite = dirs[0]
-		suite = dirs[1]
-		subSuite = strings.TrimSuffix(strings.Join(append(dirs[2:], leaf), "/"), "/")
+		return dirs + "." + fileBase
 	}
-	return
+}
+
+// specPathParts splits a spec file path into the dot-joined directory path
+// and the file base name (extension stripped), starting below specs/.
+// E.g. "specs/api/users/create.spec" → ("api.users", "create").
+func specPathParts(specPath string) (dirs, fileBase string) {
+	p := posixPath(specPath)
+	p = strings.TrimPrefix(p, "./specs/")
+	p = strings.TrimPrefix(p, "specs/")
+	p = strings.TrimPrefix(p, "/")
+	p = strings.TrimPrefix(p, "./")
+	dir, file := filepath.Split(p)
+	var segments []string
+	for _, seg := range strings.Split(strings.Trim(dir, "/"), "/") {
+		if seg != "" {
+			segments = append(segments, seg)
+		}
+	}
+	dirs = strings.Join(segments, ".")
+	fileBase = strings.TrimSuffix(file, filepath.Ext(file))
+	return dirs, fileBase
 }
 
 func firstNonEmpty(values ...string) string {

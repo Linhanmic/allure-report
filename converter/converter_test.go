@@ -34,7 +34,7 @@ func TestConvertPassedScenarioWithSteps(t *testing.T) {
 	}
 	assertLabel(t, tr.Labels, "framework", "gauge")
 	assertLabel(t, tr.Labels, "suite", "用户认证")
-	assertLabel(t, tr.Labels, "parentSuite", "demo")
+	assertNoLabel(t, tr.Labels, "parentSuite")
 	if len(model.Containers) < 2 {
 		t.Fatalf("expected suite and spec containers, got %d", len(model.Containers))
 	}
@@ -256,6 +256,7 @@ func TestConvertTagsToLabelsAndLinks(t *testing.T) {
 	assertLabel(t, tr.Labels, "owner", "qa")
 	assertLabel(t, tr.Labels, "epic", "交易")
 	assertLabel(t, tr.Labels, "feature", "订单")
+	assertLabelCount(t, tr.Labels, "feature", 1)
 	assertLabel(t, tr.Labels, "tag", "smoke")
 	if len(tr.Links) != 1 || tr.Links[0].URL != "https://jira.example.com/BUG-12" {
 		t.Fatalf("links: %+v", tr.Links)
@@ -405,6 +406,28 @@ func assertLabel(t *testing.T, labels []Label, name, value string) {
 	t.Fatalf("missing label %s=%s in %+v", name, value, labels)
 }
 
+func assertNoLabel(t *testing.T, labels []Label, name string) {
+	t.Helper()
+	for _, l := range labels {
+		if l.Name == name {
+			t.Fatalf("unexpected label %s=%s in %+v", name, l.Value, labels)
+		}
+	}
+}
+
+func assertLabelCount(t *testing.T, labels []Label, name string, want int) {
+	t.Helper()
+	got := 0
+	for _, l := range labels {
+		if l.Name == name {
+			got++
+		}
+	}
+	if got != want {
+		t.Fatalf("label %s: got %d occurrences, want %d in %+v", name, got, want, labels)
+	}
+}
+
 func hasParam(params []Parameter, name, value string) bool {
 	for _, p := range params {
 		if p.Name == name && p.Value == value {
@@ -414,55 +437,20 @@ func hasParam(params []Parameter, name, value string) bool {
 	return false
 }
 
-func TestSpecNestingFlat(t *testing.T) {
-	pSuite, sSuite, subSuite := specNesting("specs/login.spec")
-	if pSuite != "" {
-		t.Fatalf("parentSuite: %s", pSuite)
+func TestSpecPathParts(t *testing.T) {
+	cases := []struct{ path, dirs, fileBase string }{
+		{"specs/login.spec", "", "login"},
+		{"specs/auth/login.spec", "auth", "login"},
+		{"specs/api/users/create.spec", "api.users", "create"},
+		{"specs/a/b/c/d.spec", "a.b.c", "d"},
+		{"specs\\auth\\login.spec", "auth", "login"},
+		{"", "", ""},
 	}
-	if sSuite != "login" {
-		t.Fatalf("suite: %s", sSuite)
-	}
-	if subSuite != "" {
-		t.Fatalf("subSuite: %s", subSuite)
-	}
-}
-
-func TestSpecNestingOneLevel(t *testing.T) {
-	pSuite, sSuite, subSuite := specNesting("specs/auth/login.spec")
-	if pSuite != "auth" {
-		t.Fatalf("parentSuite: %s", pSuite)
-	}
-	if sSuite != "login" {
-		t.Fatalf("suite: %s", sSuite)
-	}
-	if subSuite != "" {
-		t.Fatalf("subSuite: %s", subSuite)
-	}
-}
-
-func TestSpecNestingTwoLevels(t *testing.T) {
-	pSuite, sSuite, subSuite := specNesting("specs/api/users/create.spec")
-	if pSuite != "api" {
-		t.Fatalf("parentSuite: %s", pSuite)
-	}
-	if sSuite != "users" {
-		t.Fatalf("suite: %s", sSuite)
-	}
-	if subSuite != "create" {
-		t.Fatalf("subSuite: %s", subSuite)
-	}
-}
-
-func TestSpecNestingDeepNesting(t *testing.T) {
-	pSuite, sSuite, subSuite := specNesting("specs/a/b/c/d.spec")
-	if pSuite != "a" {
-		t.Fatalf("parentSuite: %s", pSuite)
-	}
-	if sSuite != "b" {
-		t.Fatalf("suite: %s", sSuite)
-	}
-	if subSuite != "c/d" {
-		t.Fatalf("subSuite: %s", subSuite)
+	for _, c := range cases {
+		dirs, fileBase := specPathParts(c.path)
+		if dirs != c.dirs || fileBase != c.fileBase {
+			t.Fatalf("specPathParts(%q) = (%q, %q), want (%q, %q)", c.path, dirs, fileBase, c.dirs, c.fileBase)
+		}
 	}
 }
 
@@ -487,12 +475,13 @@ func TestConvertNestedDirectoryLabels(t *testing.T) {
 	model := Convert(suite, testOpts(t))
 	tr := model.Results[0]
 	assertLabel(t, tr.Labels, "parentSuite", "auth")
-	assertLabel(t, tr.Labels, "suite", "login")
+	assertLabel(t, tr.Labels, "suite", "登录验证")
 	assertLabel(t, tr.Labels, "feature", "登录验证")
-	assertLabel(t, tr.Labels, "package", "specs/auth/login.spec")
+	assertLabel(t, tr.Labels, "package", "auth.login")
+	assertLabel(t, tr.Labels, "testClass", "login")
 }
 
-func TestConvertNestedDirectoryWithSubSuite(t *testing.T) {
+func TestConvertDeepNestedDirectoryLabels(t *testing.T) {
 	suite := &gauge_messages.ProtoSuiteResult{
 		ProjectName:   "demo",
 		TimestampISO:  "2026-09-14T06:00:00Z",
@@ -512,17 +501,18 @@ func TestConvertNestedDirectoryWithSubSuite(t *testing.T) {
 	}
 	model := Convert(suite, testOpts(t))
 	tr := model.Results[0]
-	assertLabel(t, tr.Labels, "parentSuite", "api")
-	assertLabel(t, tr.Labels, "suite", "users")
-	assertLabel(t, tr.Labels, "subSuite", "create")
-	assertLabel(t, tr.Labels, "package", "specs/api/users/create.spec")
+	assertLabel(t, tr.Labels, "parentSuite", "api.users")
+	assertLabel(t, tr.Labels, "suite", "创建用户")
+	assertNoLabel(t, tr.Labels, "subSuite")
+	assertLabel(t, tr.Labels, "package", "api.users.create")
+	assertLabel(t, tr.Labels, "testClass", "create")
 }
 
 func TestConvertFlatSpecUsesSpecHeading(t *testing.T) {
 	suite := sampleSuite(passedScenario("登录成功"))
 	model := Convert(suite, testOpts(t))
 	tr := model.Results[0]
-	assertLabel(t, tr.Labels, "parentSuite", "demo")
+	assertNoLabel(t, tr.Labels, "parentSuite")
 	assertLabel(t, tr.Labels, "suite", "用户认证")
 }
 
@@ -533,5 +523,21 @@ func TestFullNameStripsSpecsPrefix(t *testing.T) {
 	got := fullName(spec, "登录成功")
 	if got != "auth/login.spec#登录成功" {
 		t.Fatalf("fullName: %s", got)
+	}
+}
+
+func TestPackageLabel(t *testing.T) {
+	cases := []struct{ path, want string }{
+		{"specs/auth/login.spec", "auth.login"},
+		{"specs/api/users/create.spec", "api.users.create"},
+		{"specs/login.spec", "login"},
+		{"/abs/project/specs/auth/login.spec", "abs.project.specs.auth.login"},
+		{"specs\\auth\\login.spec", "auth.login"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := packageLabel(c.path); got != c.want {
+			t.Fatalf("packageLabel(%q) = %q, want %q", c.path, got, c.want)
+		}
 	}
 }

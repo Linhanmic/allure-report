@@ -25,7 +25,7 @@ go run build/make.go --install
 
 ```bash
 make distro
-gauge install allure-report --file deploy/allure-report-0.3.0-<os>.<arch>.zip
+gauge install allure-report --file deploy/allure-report-0.4.0-<os>.<arch>.zip
 ```
 
 在 Gauge 项目的 `manifest.json` 中加入插件：

@@ -8,3 +8,4 @@ allure-results
 allure-report
 reports
 coverage.out
+.workbuddy/
